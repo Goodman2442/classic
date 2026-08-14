@@ -1,21 +1,27 @@
 #!/usr/bin/env bash
-# Устанавливает четырёхслойный дизайн-стек в Claude Code.
+# Устанавливает пятислойный дизайн-стек в Claude Code.
 #
 #   ./install-design-stack.sh                  # в ~/.claude/skills (все проекты)
 #   ./install-design-stack.sh --project .      # в ./.claude/skills (один проект)
 #   ./install-design-stack.sh --no-gsap        # без полосы B
 #   ./install-design-stack.sh --dry-run        # показать, что будет сделано
+#   ./install-design-stack.sh --update         # обновить копии из upstream и поставить
 #
-# Ставит только отобранные скиллы, а не паки целиком: описания всех включённых
-# скиллов лежат в контексте каждой сессии постоянно, поэтому лишнее размывает
-# срабатывание.
+# По умолчанию ставит из копий, лежащих в vendor/ этого репозитория: интернет
+# не нужен, версия зафиксирована, апстрим не может её изменить задним числом.
+# Происхождение и коммиты — в vendor/MANIFEST.md.
+#
+# Флаг --update заново клонирует четыре репозитория, обновляет vendor/ и ставит
+# уже обновлённое. Это единственный режим, которому нужен GitHub.
 
 set -euo pipefail
 
+HERE="$(cd "$(dirname "$0")" && pwd)"
 TARGET_MODE="user"
 PROJECT_DIR=""
 WITH_GSAP=1
 DRY_RUN=0
+UPDATE=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -26,7 +32,8 @@ while [ $# -gt 0 ]; do
       ;;
     --no-gsap) WITH_GSAP=0; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
-    -h|--help) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --update)  UPDATE=1; shift ;;
+    -h|--help) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Неизвестный аргумент: $1" >&2; exit 2 ;;
   esac
 done
@@ -37,76 +44,93 @@ else
   SKILLS_DIR="$HOME/.claude/skills"
 fi
 
-command -v git >/dev/null 2>&1 || { echo "Нужен git." >&2; exit 1; }
+# Порядок: имя папки | слой. Первый — наш собственный, лежит в skills/.
+CORE="design-taste-frontend|01 направление и генерация
+impeccable|02 ревизия готового
+emil-design-eng|03 решения о движении
+review-animations|03 проверка анимаций
+improve-animations|03 поиск мест для движения"
 
-echo "Цель: $SKILLS_DIR"
+GSAP="gsap-core|04 реализация, полоса B
+gsap-timeline|04 реализация, полоса B
+gsap-scrolltrigger|04 реализация, полоса B
+gsap-react|04 реализация, полоса B"
+
+PLAN="$CORE"
+[ "$WITH_GSAP" -eq 1 ] && PLAN="$PLAN
+$GSAP"
+
+echo "Цель:     $SKILLS_DIR"
+echo "Источник: $([ "$UPDATE" -eq 1 ] && echo "GitHub (обновление vendor/)" || echo "vendor/ этого репозитория")"
 echo
-
-WORK="$(mktemp -d)"
-cleanup() { rm -rf "$WORK"; }
-trap cleanup EXIT
-
-# repo                          исходная папка                       имя команды
-PLAN="
-Leonxlnx/taste-skill|skills/taste-skill|design-taste-frontend|01 направление и генерация
-pbakaus/impeccable|.claude/skills/impeccable|impeccable|02 ревизия готового
-emilkowalski/skills|skills/emil-design-eng|emil-design-eng|03 решения о движении
-emilkowalski/skills|skills/review-animations|review-animations|03 проверка анимаций
-emilkowalski/skills|skills/improve-animations|improve-animations|03 поиск мест для движения
-"
-
-if [ "$WITH_GSAP" -eq 1 ]; then
-  PLAN="$PLAN
-greensock/gsap-skills|skills/gsap-core|gsap-core|04 реализация, полоса B
-greensock/gsap-skills|skills/gsap-timeline|gsap-timeline|04 реализация, полоса B
-greensock/gsap-skills|skills/gsap-scrolltrigger|gsap-scrolltrigger|04 реализация, полоса B
-greensock/gsap-skills|skills/gsap-react|gsap-react|04 реализация, полоса B
-"
-fi
 
 if [ "$DRY_RUN" -eq 1 ]; then
   echo "Будет установлено:"
-  printf '  %-22s  %s\n' "visual-qa" "05 визуальная проверка (из этого репозитория)"
-  echo "$PLAN" | while IFS='|' read -r repo src name role; do
-    [ -z "${repo:-}" ] && continue
+  printf '  %-22s  %s\n' "visual-qa" "05 визуальная проверка (свой скилл)"
+  echo "$PLAN" | while IFS='|' read -r name role; do
+    [ -z "${name:-}" ] && continue
     printf '  %-22s  %s\n' "$name" "$role"
   done
   exit 0
 fi
 
-mkdir -p "$SKILLS_DIR"
+# --- обновление копий из upstream -------------------------------------------
+if [ "$UPDATE" -eq 1 ]; then
+  command -v git >/dev/null 2>&1 || { echo "Для --update нужен git." >&2; exit 1; }
+  WORK="$(mktemp -d)"
+  trap 'rm -rf "$WORK"' EXIT
 
-clone_once() {
-  repo="$1"
-  dest="$WORK/$(echo "$repo" | tr '/' '_')"
-  if [ ! -d "$dest" ]; then
-    echo "  клонирую $repo"
-    git clone --depth 1 --quiet "https://github.com/$repo.git" "$dest"
-  fi
-}
+  # репозиторий | путь внутри репозитория | имя папки у нас
+  SOURCES="Leonxlnx/taste-skill|skills/taste-skill|design-taste-frontend
+pbakaus/impeccable|.claude/skills/impeccable|impeccable
+emilkowalski/skills|skills/emil-design-eng|emil-design-eng
+emilkowalski/skills|skills/review-animations|review-animations
+emilkowalski/skills|skills/improve-animations|improve-animations
+greensock/gsap-skills|skills/gsap-core|gsap-core
+greensock/gsap-skills|skills/gsap-timeline|gsap-timeline
+greensock/gsap-skills|skills/gsap-scrolltrigger|gsap-scrolltrigger
+greensock/gsap-skills|skills/gsap-react|gsap-react"
 
-# Пятый слой лежит прямо в этом репозитории, клонировать нечего.
-LOCAL_SKILL="$(cd "$(dirname "$0")" && pwd)/skills/visual-qa"
-if [ -d "$LOCAL_SKILL" ]; then
-  rm -rf "${SKILLS_DIR:?}/visual-qa"
-  cp -R "$LOCAL_SKILL" "$SKILLS_DIR/visual-qa"
-  echo "  поставлен visual-qa"
+  echo "$SOURCES" | while IFS='|' read -r repo src name; do
+    [ -z "${repo:-}" ] && continue
+    dest="$WORK/$(echo "$repo" | tr '/' '_')"
+    if [ ! -d "$dest" ]; then
+      echo "  клонирую $repo"
+      git clone --depth 1 --quiet "https://github.com/$repo.git" "$dest"
+    fi
+    if [ ! -d "$dest/$src" ]; then
+      echo "  ПРОПУСК $name — не найдено $repo/$src, оставляю прежнюю копию" >&2
+      continue
+    fi
+    rm -rf "$HERE/vendor/skills/$name"
+    cp -R "$dest/$src" "$HERE/vendor/skills/$name"
+    echo "  обновлён $name"
+  done
+  echo "  vendor/ обновлён; сверьте diff перед коммитом"
+  echo
 fi
 
-echo "$PLAN" | while IFS='|' read -r repo src name role; do
-  [ -z "${repo:-}" ] && continue
-  clone_once "$repo"
-  SRC="$WORK/$(echo "$repo" | tr '/' '_')/$src"
-  if [ ! -d "$SRC" ]; then
-    echo "  ПРОПУСК $name — не найдено $repo/$src (структура репозитория изменилась)" >&2
-    continue
+# --- установка ---------------------------------------------------------------
+mkdir -p "$SKILLS_DIR"
+
+install_dir() {
+  src="$1"; name="$2"
+  if [ ! -d "$src" ]; then
+    echo "  ПРОПУСК $name — нет $src" >&2
+    return
   fi
   rm -rf "${SKILLS_DIR:?}/$name"
-  cp -R "$SRC" "$SKILLS_DIR/$name"
+  cp -R "$src" "$SKILLS_DIR/$name"
   echo "  поставлен $name"
+}
+
+install_dir "$HERE/skills/visual-qa" visual-qa
+echo "$PLAN" | while IFS='|' read -r name role; do
+  [ -z "${name:-}" ] && continue
+  install_dir "$HERE/vendor/skills/$name" "$name"
 done
 
-# Правила стыковки слоёв. Без них четыре скилла спорят об одном и том же,
+# Правила стыковки слоёв. Без них скиллы спорят об одном и том же,
 # а модель их усредняет.
 RULES_FILE="$(cd "$SKILLS_DIR/.." && pwd)/design-stack-rules.md"
 cat > "$RULES_FILE" <<'RULES'
@@ -144,5 +168,5 @@ echo "  $RULES_FILE"
 echo "Вставьте их в CLAUDE.md — без этого слои спорят друг с другом."
 echo
 echo "Проверка: откройте Claude Code и наберите /skills — в списке должны быть"
-echo "design-taste-frontend, impeccable, emil-design-eng, review-animations."
+echo "design-taste-frontend, impeccable, emil-design-eng, visual-qa."
 echo "Скилл с именем, занятым другой командой, пропускается молча."
