@@ -66,6 +66,7 @@ fi
 
 if [ "$DRY_RUN" -eq 1 ]; then
   echo "Будет установлено:"
+  printf '  %-22s  %s\n' "visual-qa" "05 визуальная проверка (из этого репозитория)"
   echo "$PLAN" | while IFS='|' read -r repo src name role; do
     [ -z "${repo:-}" ] && continue
     printf '  %-22s  %s\n' "$name" "$role"
@@ -83,6 +84,14 @@ clone_once() {
     git clone --depth 1 --quiet "https://github.com/$repo.git" "$dest"
   fi
 }
+
+# Пятый слой лежит прямо в этом репозитории, клонировать нечего.
+LOCAL_SKILL="$(cd "$(dirname "$0")" && pwd)/skills/visual-qa"
+if [ -d "$LOCAL_SKILL" ]; then
+  rm -rf "${SKILLS_DIR:?}/visual-qa"
+  cp -R "$LOCAL_SKILL" "$SKILLS_DIR/visual-qa"
+  echo "  поставлен visual-qa"
+fi
 
 echo "$PLAN" | while IFS='|' read -r repo src name role; do
   [ -z "${repo:-}" ] && continue
@@ -108,6 +117,7 @@ cat > "$RULES_FILE" <<'RULES'
 - impeccable — ревизия готового, только по явной команде
 - emil-design-eng — все решения о движении: надо ли, сколько мс, какая кривая
 - gsap-* — реализация движения, только в полосе B
+- visual-qa — рендер, снимок, критика по снимку, правка
 
 Правила:
 1. Длительности и кривые берутся у Emil. Ручка MOTION_INTENSITY у Taste
@@ -121,6 +131,9 @@ cat > "$RULES_FILE" <<'RULES'
    сами они не знают про prefers-reduced-motion и бюджеты производительности.
 5. Один акцент, одна система радиусов, ноль длинных тире — правила Taste,
    они выше стилевых предпочтений Impeccable.
+6. Интерфейс не считается готовым, пока его не увидели: после сборки или
+   правки вёрстки прогонять visual-qa. Максимум два цикла правок, дальше
+   замечания отдаются человеку списком.
 RULES
 
 echo
