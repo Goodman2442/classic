@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Устанавливает пятислойный дизайн-стек в Claude Code.
+# Устанавливает дизайн-стек в Claude Code: совет направления плюс пять слоёв.
 #
 #   ./install-design-stack.sh                  # в ~/.claude/skills (все проекты)
 #   ./install-design-stack.sh --project .      # в ./.claude/skills (один проект)
@@ -66,6 +66,7 @@ echo
 
 if [ "$DRY_RUN" -eq 1 ]; then
   echo "Будет установлено:"
+  printf '  %-22s  %s\n' "design-council" "00 выбор направления (свой скилл)"
   printf '  %-22s  %s\n' "visual-qa" "05 визуальная проверка (свой скилл)"
   echo "$PLAN" | while IFS='|' read -r name role; do
     [ -z "${name:-}" ] && continue
@@ -124,6 +125,7 @@ install_dir() {
   echo "  поставлен $name"
 }
 
+install_dir "$HERE/skills/design-council" design-council
 install_dir "$HERE/skills/visual-qa" visual-qa
 echo "$PLAN" | while IFS='|' read -r name role; do
   [ -z "${name:-}" ] && continue
@@ -137,6 +139,7 @@ cat > "$RULES_FILE" <<'RULES'
 ## Дизайн-стек
 
 Слои и зоны ответственности:
+- design-council — выбор направления до сборки: что делаем и почему
 - design-taste-frontend — направление, композиция, визуальный язык
 - impeccable — ревизия готового, только по явной команде
 - emil-design-eng — все решения о движении: надо ли, сколько мс, какая кривая
@@ -158,6 +161,10 @@ cat > "$RULES_FILE" <<'RULES'
 6. Интерфейс не считается готовым, пока его не увидели: после сборки или
    правки вёрстки прогонять visual-qa. Максимум два цикла правок, дальше
    замечания отдаются человеку списком.
+7. design-council решает что и почему, design-taste-frontend — как.
+   Совет созывается, только когда направление не выбрано или результат
+   не нравится и человек не может сформулировать чем. Если направление
+   уже ясно, сборка идёт сразу, без заседания.
 RULES
 
 echo
@@ -168,5 +175,5 @@ echo "  $RULES_FILE"
 echo "Вставьте их в CLAUDE.md — без этого слои спорят друг с другом."
 echo
 echo "Проверка: откройте Claude Code и наберите /skills — в списке должны быть"
-echo "design-taste-frontend, impeccable, emil-design-eng, visual-qa."
+echo "design-council, design-taste-frontend, impeccable, emil-design-eng, visual-qa."
 echo "Скилл с именем, занятым другой командой, пропускается молча."

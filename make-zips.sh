@@ -15,7 +15,7 @@ OUT="$HERE/dist"
 
 # Ядро: работает на любом проекте. GSAP-скиллы нужны только в полосе B,
 # а лишние записи засоряют меню и размывают срабатывание.
-CORE="design-taste-frontend impeccable emil-design-eng review-animations visual-qa"
+CORE="design-council design-taste-frontend impeccable emil-design-eng review-animations visual-qa"
 EXTRA="improve-animations gsap-core gsap-timeline gsap-scrolltrigger gsap-react"
 
 LIST="$CORE"
