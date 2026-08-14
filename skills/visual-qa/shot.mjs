@@ -67,7 +67,33 @@ const url = /^https?:\/\//.test(target)
 const { chromium } = loadPlaywright();
 await mkdir(outDir, { recursive: true });
 
-const browser = await chromium.launch();
+// Предпочитаем сборку Chromium от Playwright: она зафиксирована по версии и
+// совпадает с той, что стоит в облачных сессиях, поэтому снимки одинаковы
+// везде. Если её не скачивали, откатываемся на установленный Google Chrome —
+// он запускается во временном профиле, так что расширения и куки на снимок
+// всё равно не влияют.
+async function launch() {
+  try {
+    return await chromium.launch();
+  } catch (e) {
+    for (const channel of ["chrome", "msedge"]) {
+      try {
+        const b = await chromium.launch({ channel });
+        console.error(`Chromium от Playwright не найден, снимаю через ${channel}.`);
+        return b;
+      } catch {}
+    }
+    console.error(
+      "Не удалось запустить браузер. Поставьте сборку Playwright:\n" +
+        "  npx playwright install chromium\n" +
+        "либо убедитесь, что установлен Google Chrome.\n\n" +
+        String(e.message || e),
+    );
+    process.exit(1);
+  }
+}
+
+const browser = await launch();
 const written = [];
 
 for (const theme of themes) {
